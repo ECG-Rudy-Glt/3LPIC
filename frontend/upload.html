@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coursero - Soumettre un exercice</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="upload-section">
+        <header>
+          <h1>Soumettre un exercice</h1>
+          <a href="authentication.html" class="btn-secondary"
+            >Retour au tableau de bord</a
+          >
+        </header>
+
+        <form id="upload-form" class="upload-form">
+          <div class="form-group">
+            <label for="course">Cours</label>
+            <select id="course" required>
+              <option value="">Sélectionnez un cours</option>
+              <!-- Rempli dynamiquement par JavaScript -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="exercise">Exercice</label>
+            <select id="exercise" required>
+              <option value="">Sélectionnez d'abord un cours</option>
+              <!-- Rempli dynamiquement par JavaScript -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="language">Langage</label>
+            <select id="language" required>
+              <option value="">Sélectionnez un langage</option>
+              <option value="python">Python</option>
+              <option value="c">C</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="code-file">Fichier de code</label>
+            <input type="file" id="code-file" accept=".py,.c" required />
+            <small>Formats acceptés: .py (Python) ou .c (C)</small>
+          </div>
+
+          <div id="upload-status" class="upload-status hidden">
+            <div class="progress-bar">
+              <div class="progress"></div>
+            </div>
+            <p class="status-message"></p>
+          </div>
+
+          <button type="submit" class="btn-primary">Soumettre</button>
+        </form>
+      </div>
+    </div>
+    <script src="script.js"></script>
+  </body>
+</html>

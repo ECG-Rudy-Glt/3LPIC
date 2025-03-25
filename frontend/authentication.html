@@ -1,0 +1,71 @@
+<!--
+Filename: c:\Users\gault\Documents\supinfo code\3LPIC\3LPIC\artefact.html
+Path: c:\Users\gault\Documents\supinfo code\3LPIC\3LPIC
+Created Date: Tuesday, March 25th 2025, 1:27:44 pm
+Author: GAULT Rudy
+
+Copyright (c) 2025 Cloud Temple
+-->
+
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coursero - Système d'évaluation de code</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Section Authentification -->
+      <div id="auth-section" class="auth-section">
+        <h1>Coursero</h1>
+        <div class="auth-form">
+          <h2>Connexion</h2>
+          <form id="login-form">
+            <div class="form-group">
+              <label for="email">Email</label>
+              <input type="email" id="email" required />
+            </div>
+            <div class="form-group">
+              <label for="password">Mot de passe</label>
+              <input type="password" id="password" required />
+            </div>
+            <button type="submit" class="btn-primary">Se connecter</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Dashboard (visible après connexion) -->
+      <div id="dashboard" class="dashboard hidden">
+        <header>
+          <h2>Tableau de bord</h2>
+          <button id="logout" class="btn-secondary">Déconnexion</button>
+        </header>
+        <div class="dashboard-content">
+          <div class="quick-actions">
+            <a href="upload.html" class="btn-primary">Soumettre un exercice</a>
+          </div>
+          <div class="submissions-list">
+            <h3>Mes soumissions</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Cours</th>
+                  <th>Exercice</th>
+                  <th>Langage</th>
+                  <th>Statut</th>
+                  <th>Score</th>
+                </tr>
+              </thead>
+              <tbody id="submissions-table">
+                <!-- Rempli dynamiquement par JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="script.js"></script>
+  </body>
+</html>

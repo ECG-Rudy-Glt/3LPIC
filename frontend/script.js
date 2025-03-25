@@ -3,8 +3,53 @@
  * @company Cloud Temple
  * @created_at 2025-03-25 13:31:07
  * @updated_by GAULT Rudy
- * @updated_at 2025-03-25 13:56:52
+ * @updated_at 2025-03-25 14:10:25
  */
+
+// Configuration du mode démo (à désactiver une fois le backend implémenté)
+const DEMO_MODE = true;
+
+// Données de démo pour simuler le backend
+const demoData = {
+  user: {
+    id: "demo123",
+    email: "demo@coursero.com",
+    fullName: "Utilisateur Démo",
+  },
+  courses: [
+    { id: "course1", name: "Algorithmes et structures de données" },
+    { id: "course2", name: "Programmation système" },
+  ],
+  exercises: {
+    course1: [
+      { id: "ex1", number: 1, name: "Tri à bulle" },
+      { id: "ex2", number: 2, name: "Liste chaînée" },
+      { id: "ex3", number: 3, name: "Arbre binaire" },
+    ],
+    course2: [
+      { id: "ex4", number: 1, name: "Gestion de processus" },
+      { id: "ex5", number: 2, name: "Threads" },
+      { id: "ex6", number: 3, name: "Sockets" },
+    ],
+  },
+  submissions: [
+    {
+      id: "sub1",
+      courseName: "Algorithmes et structures de données",
+      exerciseName: "Exercice 1 - Tri à bulle",
+      language: "python",
+      status: "completed",
+      score: 85,
+    },
+    {
+      id: "sub2",
+      courseName: "Programmation système",
+      exerciseName: "Exercice 2 - Threads",
+      language: "c",
+      status: "pending",
+    },
+  ],
+};
 
 // Gestion de l'état de l'application
 const appState = {
@@ -85,7 +130,22 @@ async function handleLogin(e) {
   const password = document.getElementById("password").value;
 
   try {
-    // Appel à l'API d'authentification
+    if (DEMO_MODE) {
+      // Mode démo: accepter n'importe quel email/mot de passe
+      const demoToken = "demo_token_" + Math.random().toString(36).substring(2);
+      localStorage.setItem("token", demoToken);
+      localStorage.setItem("user", JSON.stringify(demoData.user));
+
+      appState.isAuthenticated = true;
+      appState.user = demoData.user;
+
+      updateUIState();
+      loadAvailableCourses();
+      showNotification("Connexion réussie (mode démo)", "success");
+      return;
+    }
+
+    // Appel à l'API d'authentification (mode normal)
     const response = await fetch(`${API.BASE_URL}${API.ENDPOINTS.LOGIN}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -127,6 +187,25 @@ function handleLogout() {
 // Chargement des cours disponibles
 async function loadAvailableCourses() {
   try {
+    if (DEMO_MODE) {
+      // Mode démo: utiliser les données fictives
+      appState.availableCourses = demoData.courses;
+
+      // Mettre à jour le menu déroulant des cours si disponible
+      const courseSelect = document.getElementById("course");
+      if (courseSelect) {
+        courseSelect.innerHTML =
+          `<option value="">Sélectionnez un cours</option>` +
+          demoData.courses
+            .map(
+              (course) => `<option value="${course.id}">${course.name}</option>`
+            )
+            .join("");
+      }
+      return;
+    }
+
+    // Mode normal: appel à l'API
     const response = await fetch(`${API.BASE_URL}${API.ENDPOINTS.COURSES}`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -160,6 +239,27 @@ async function loadExercisesForCourse(courseId) {
   if (!courseId) return;
 
   try {
+    if (DEMO_MODE) {
+      // Mode démo: utiliser les données fictives
+      const exercises = demoData.exercises[courseId] || [];
+      appState.availableExercises[courseId] = exercises;
+
+      // Mettre à jour le menu déroulant des exercices
+      const exerciseSelect = document.getElementById("exercise");
+      if (exerciseSelect) {
+        exerciseSelect.innerHTML =
+          `<option value="">Sélectionnez un exercice</option>` +
+          exercises
+            .map(
+              (ex) =>
+                `<option value="${ex.id}">Exercice ${ex.number} - ${ex.name}</option>`
+            )
+            .join("");
+      }
+      return;
+    }
+
+    // Mode normal: appel à l'API
     const response = await fetch(
       `${API.BASE_URL}${API.ENDPOINTS.EXERCISES}?courseId=${courseId}`,
       {
@@ -195,6 +295,14 @@ async function loadExercisesForCourse(courseId) {
 // Récupération des soumissions de l'utilisateur
 async function fetchUserSubmissions() {
   try {
+    if (DEMO_MODE) {
+      // Mode démo: utiliser les données fictives
+      appState.submissions = demoData.submissions;
+      updateSubmissionsTable();
+      return;
+    }
+
+    // Mode normal: appel à l'API
     const response = await fetch(
       `${API.BASE_URL}${API.ENDPOINTS.SUBMISSIONS}`,
       {
@@ -243,7 +351,42 @@ async function handleUpload(e) {
     statusMessage.textContent = "Envoi en cours...";
     progressBar.style.width = "25%";
 
-    // Créer un objet FormData pour l'envoi du fichier
+    if (DEMO_MODE) {
+      // Simuler un délai d'envoi en mode démo
+      progressBar.style.width = "50%";
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      progressBar.style.width = "100%";
+
+      // Ajouter une soumission fictive
+      const courseName =
+        demoData.courses.find((c) => c.id === courseId)?.name || courseId;
+      const exercise = demoData.exercises[courseId]?.find(
+        (e) => e.id === exerciseId
+      );
+      const exerciseName = exercise
+        ? `Exercice ${exercise.number} - ${exercise.name}`
+        : exerciseId;
+
+      demoData.submissions.unshift({
+        id: "sub_" + Math.random().toString(36).substring(2),
+        courseName: courseName,
+        exerciseName: exerciseName,
+        language: language,
+        status: "pending",
+      });
+
+      statusMessage.textContent =
+        "Soumission réussie! Votre code est en attente d'évaluation.";
+      showNotification("Fichier envoyé avec succès (mode démo)", "success");
+
+      // Rediriger vers le tableau de bord après un court délai
+      setTimeout(() => {
+        window.location.href = "authentication.html";
+      }, 2000);
+      return;
+    }
+
+    // Créer un objet FormData pour l'envoi du fichier (mode normal)
     const formData = new FormData();
     formData.append("file", file);
     formData.append("courseId", courseId);
@@ -327,7 +470,12 @@ function updateUIState() {
 function updateSubmissionsTable() {
   const submissionsTable = document.getElementById("submissions-table");
 
-  if (!submissionsTable || !appState.submissions.length) return;
+  if (!submissionsTable) return;
+
+  if (!appState.submissions.length) {
+    submissionsTable.innerHTML = `<tr><td colspan="5" class="text-center">Aucune soumission trouvée</td></tr>`;
+    return;
+  }
 
   submissionsTable.innerHTML = appState.submissions
     .map((sub) => {
@@ -380,10 +528,33 @@ function showNotification(message, type) {
   }, 3000);
 }
 
-// Fonction de rafraîchissement périodique des soumissions
-function setupSubmissionsPolling() {
-  if (appState.isAuthenticated) {
-    // Vérifier les nouvelles soumissions toutes les 30 secondes
-    setInterval(fetchUserSubmissions, 30000);
-  }
+// Fonction pour simuler l'évaluation en mode démo
+function setupDemoEvaluation() {
+  if (!DEMO_MODE) return;
+
+  // Vérifier périodiquement s'il y a des soumissions en attente, puis les évaluer
+  setInterval(() => {
+    const pendingSubmissions = demoData.submissions.filter(
+      (sub) => sub.status === "pending"
+    );
+
+    for (const sub of pendingSubmissions) {
+      // Simuler un statut "en cours d'évaluation" pendant quelques secondes
+      sub.status = "processing";
+
+      // Simuler la fin de l'évaluation avec un score aléatoire
+      setTimeout(() => {
+        sub.status = "completed";
+        sub.score = Math.floor(Math.random() * 40) + 60; // Score entre 60 et 100
+        updateSubmissionsTable();
+      }, 5000);
+    }
+
+    if (pendingSubmissions.length > 0) {
+      updateSubmissionsTable();
+    }
+  }, 3000);
 }
+
+// Démarrer la simulation d'évaluation en mode démo
+setupDemoEvaluation();

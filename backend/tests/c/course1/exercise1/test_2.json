@@ -1,0 +1,4 @@
+{
+  "args": ["-3", "8"],
+  "expected_output": "5"
+}

@@ -57,7 +57,7 @@ python3 -m venv venv
 source venv/bin/activate
 
 # Installer les dépendances Python
-pip install flask flask-cors psycopg2-binary bcrypt werkzeug
+pip install flask flask-cors psycopg2-binary bcrypt werkzeug PyJWT
 
 # Créer les répertoires nécessaires pour les uploads
 mkdir -p backend/uploads

@@ -3,7 +3,7 @@
 # @company Cloud Temple
 # @created_at 2025-03-25 13:51:39
 # @updated_by GAULT Rudy
-# @updated_at 2025-03-25 13:54:35
+# @updated_at 2025-03-27 21:36:33
 #
 import subprocess
 import os
@@ -12,6 +12,8 @@ import tempfile
 import resource
 from pathlib import Path
 from typing import Dict, List, Tuple
+
+from .security import Sandbox
 
 class CodeRunner:
     def __init__(self, timeout: int = 5, max_memory: int = 50 * 1024 * 1024):
@@ -24,6 +26,7 @@ class CodeRunner:
         """
         self.timeout = timeout
         self.max_memory = max_memory
+        self.sandbox = Sandbox()
         
     def run_python_code(self, file_path: str, arguments: List[str]) -> Tuple[str, str, int]:
         """
@@ -32,8 +35,29 @@ class CodeRunner:
         Returns:
             Tuple de (stdout, stderr, exit_code)
         """
-        cmd = ["python3", file_path] + arguments
-        return self._execute_with_constraints(cmd)
+        # Créer une copie du fichier dans l'environnement sandbox
+        sandbox_dir = self.sandbox.create_sandbox_environment("python")
+        
+        try:
+            # Copier le fichier de code vers la sandbox
+            target_file = os.path.join(sandbox_dir, "tmp", "code.py")
+            os.makedirs(os.path.dirname(target_file), exist_ok=True)
+            with open(file_path, 'r') as src, open(target_file, 'w') as dst:
+                dst.write(src.read())
+            
+            # Préparation de la commande
+            cmd = ["python3", "/tmp/code.py"] + arguments
+            
+            # Mode sécurisé: utiliser chroot via la classe Sandbox
+            if os.geteuid() == 0:  # Si on est root, on peut utiliser chroot
+                return self.sandbox.execute_in_sandbox(sandbox_dir, cmd)
+            else:
+                # Sinon, utiliser la méthode avec les limites de ressources
+                return self._execute_with_constraints(cmd)
+                
+        finally:
+            # Nettoyer l'environnement sandbox
+            self.sandbox.cleanup(sandbox_dir)
         
     def run_c_code(self, file_path: str, arguments: List[str]) -> Tuple[str, str, int]:
         """
@@ -59,9 +83,29 @@ class CodeRunner:
                 # Échec de compilation
                 return ("", f"Erreur de compilation:\n{compile_result.stderr}", compile_result.returncode)
             
-            # Exécuter le programme compilé
-            cmd = [executable] + arguments
-            return self._execute_with_constraints(cmd)
+            # Créer l'environnement sandbox
+            sandbox_dir = self.sandbox.create_sandbox_environment("c")
+            
+            try:
+                # Copier l'exécutable vers la sandbox
+                target_exec = os.path.join(sandbox_dir, "tmp", "code")
+                os.makedirs(os.path.dirname(target_exec), exist_ok=True)
+                shutil.copy(executable, target_exec)
+                os.chmod(target_exec, 0o755)  # Rendre exécutable
+                
+                # Préparation de la commande
+                cmd = ["/tmp/code"] + arguments
+                
+                # Mode sécurisé: utiliser chroot via la classe Sandbox
+                if os.geteuid() == 0:  # Si on est root, on peut utiliser chroot
+                    return self.sandbox.execute_in_sandbox(sandbox_dir, cmd)
+                else:
+                    # Sinon, utiliser la méthode avec les limites de ressources
+                    return self._execute_with_constraints(cmd)
+                    
+            finally:
+                # Nettoyer l'environnement sandbox
+                self.sandbox.cleanup(sandbox_dir)
             
         finally:
             # Nettoyer l'exécutable temporaire

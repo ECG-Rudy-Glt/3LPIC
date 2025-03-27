@@ -5,6 +5,7 @@
 # @updated_by GAULT Rudy
 # @updated_at 2025-03-25 13:55:59
 #
+import sys
 import os
 import json
 import time
@@ -13,7 +14,8 @@ from typing import Dict, List, Tuple
 
 from evaluator.runner import CodeRunner
 from evaluator.comparator import ResultComparator
-from queue.task_queue import TaskQueue
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from task_queue.task_queue import TaskQueue
 from db.database import Database
 
 class CourserEvaluator:

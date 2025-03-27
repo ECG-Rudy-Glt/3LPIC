@@ -280,3 +280,37 @@ class Database:
         """Ferme le pool de connexions"""
         if self.connection_pool:
             self.connection_pool.closeall()
+
+    def user_exists(self, email):
+        """Vérifie si un utilisateur avec cet email existe déjà"""
+        conn = self.get_connection()
+        exists = False
+        
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM users WHERE email = %s", (email,))
+                exists = cursor.fetchone()[0] > 0
+        except Exception as e:
+            print(f"Erreur lors de la vérification de l'existence de l'utilisateur: {e}")
+        finally:
+            self.release_connection(conn)
+            
+        return exists
+
+    def create_user(self, user_id, email, password_hash, full_name):
+        """Crée un nouvel utilisateur dans la base de données"""
+        conn = self.get_connection()
+        
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO users (id, email, password, full_name) VALUES (%s, %s, %s, %s)",
+                    (user_id, email, password_hash, full_name)
+                )
+                conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f"Erreur lors de la création de l'utilisateur: {e}")
+            raise
+        finally:
+            self.release_connection(conn)

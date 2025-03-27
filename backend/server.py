@@ -21,14 +21,26 @@ from functools import wraps
 
 from app import CourserEvaluator
 from db.database import Database
-
-# Initialisation de l'application Flask
+from flask import send_from_directory
+# Initialisation de l'application Flask - DÉPLACÉ ICI
 app = Flask(__name__)
 CORS(app)  # Activer CORS pour permettre les requêtes depuis le frontend
 
 # Clé secrète pour JWT
 SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'votre_clé_secrète_temporaire')
 app.config['SECRET_KEY'] = SECRET_KEY
+
+# Ajouter cette route - APRÈS la définition de app
+@app.route('/')
+def serve_frontend():
+    return send_from_directory('../frontend', 'authentication.html')
+
+# Pour servir les fichiers statiques (js, css)
+@app.route('/<path:path>')
+def serve_static(path):
+    if os.path.exists(os.path.join('../frontend', path)):
+        return send_from_directory('../frontend', path)
+    return "Not Found", 404
 
 # Initialiser l'évaluateur et la base de données
 evaluator = CourserEvaluator()
@@ -98,6 +110,53 @@ def login():
         }), 200
     
     return jsonify({'message': 'Identifiants incorrects'}), 401
+
+# Ajouter après la route de login
+
+# Route pour l'inscription
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'message': 'Données manquantes'}), 400
+    
+    email = data.get('email')
+    password = data.get('password')
+    full_name = data.get('fullName')
+    
+    if not email or not password or not full_name:
+        return jsonify({'message': 'Tous les champs sont requis'}), 400
+    
+    # Vérifier si l'utilisateur existe déjà
+    if db.user_exists(email):
+        return jsonify({'message': 'Cet email est déjà utilisé'}), 400
+    
+    # Hachage du mot de passe avant stockage
+    hashed_password = hashlib.sha256(password.encode()).hexdigest()
+    
+    # Générer un ID utilisateur unique
+    user_id = str(uuid.uuid4())
+    
+    # Enregistrer l'utilisateur dans la base de données
+    db.create_user(user_id, email, hashed_password, full_name)
+    
+    # Générer un token JWT pour l'authentification automatique
+    token = jwt.encode({
+        'user_id': user_id,
+        'email': email,
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+    }, app.config['SECRET_KEY'], algorithm="HS256")
+    
+    return jsonify({
+        'message': 'Inscription réussie',
+        'token': token,
+        'user': {
+            'id': user_id,
+            'email': email,
+            'fullName': full_name
+        }
+    }), 201
 
 # Route pour récupérer les cours disponibles
 @app.route('/api/courses', methods=['GET'])

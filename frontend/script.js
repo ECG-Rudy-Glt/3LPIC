@@ -7,7 +7,7 @@
  */
 
 // Configuration du mode démo (à désactiver une fois le backend implémenté)
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 
 // Données de démo pour simuler le backend
 const demoData = {
@@ -98,12 +98,17 @@ function checkAuthState() {
 // Configuration des écouteurs d'événements
 function setupEventListeners() {
   const loginForm = document.getElementById("login-form");
+  const registerForm = document.getElementById("register-form");
   const logoutButton = document.getElementById("logout");
   const uploadForm = document.getElementById("upload-form");
   const courseSelect = document.getElementById("course");
 
   if (loginForm) {
     loginForm.addEventListener("submit", handleLogin);
+  }
+
+  if (registerForm) {
+    registerForm.addEventListener("submit", handleRegister);
   }
 
   if (logoutButton) {
@@ -558,3 +563,57 @@ function setupDemoEvaluation() {
 
 // Démarrer la simulation d'évaluation en mode démo
 setupDemoEvaluation();
+
+// Ajouter la fonction de gestion de l'inscription
+async function handleRegister(e) {
+  e.preventDefault();
+
+  const fullName = document.getElementById("fullName").value;
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+  const confirmPassword = document.getElementById("confirmPassword").value;
+
+  // Validation des entrées
+  if (password !== confirmPassword) {
+    showNotification("Les mots de passe ne correspondent pas", "error");
+    return;
+  }
+
+  try {
+    if (DEMO_MODE) {
+      // Mode démo: simuler une inscription réussie
+      const demoToken = "demo_token_" + Math.random().toString(36).substring(2);
+      localStorage.setItem("token", demoToken);
+      localStorage.setItem("user", JSON.stringify(demoData.user));
+
+      showNotification("Inscription réussie (mode démo)", "success");
+      window.location.href = "authentication.html";
+      return;
+    }
+
+    // Appel à l'API d'inscription (mode normal)
+    const response = await fetch(`${API.BASE_URL}${API.ENDPOINTS.REGISTER}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, fullName }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Erreur lors de l'inscription");
+    }
+
+    const data = await response.json();
+
+    // Enregistrer le token et les infos utilisateur
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+
+    showNotification("Inscription réussie", "success");
+
+    // Rediriger vers la page d'accueil
+    window.location.href = "authentication.html";
+  } catch (error) {
+    showNotification(error.message, "error");
+  }
+}

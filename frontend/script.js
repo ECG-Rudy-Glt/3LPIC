@@ -1,619 +1,465 @@
-/**
- * @author GAULT Rudy
- * @company Cloud Temple
- * @created_at 2025-03-25 13:31:07
- * @updated_by GAULT Rudy
- * @updated_at 2025-03-25 14:10:25
- */
+// Configuration globale
+const API_BASE_URL = 'http://192.168.159.233:5000';
+let currentUser = null;
 
-// Configuration du mode démo (à désactiver une fois le backend implémenté)
-const DEMO_MODE = false;
+// Initialisation au chargement de la page
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Page chargée, initialisation...');
 
-// Données de démo pour simuler le backend
-const demoData = {
-  user: {
-    id: "demo123",
-    email: "demo@coursero.com",
-    fullName: "Utilisateur Démo",
-  },
-  courses: [
-    { id: "course1", name: "Algorithmes et structures de données" },
-    { id: "course2", name: "Programmation système" },
-  ],
-  exercises: {
-    course1: [
-      { id: "ex1", number: 1, name: "Tri à bulle" },
-      { id: "ex2", number: 2, name: "Liste chaînée" },
-      { id: "ex3", number: 3, name: "Arbre binaire" },
-    ],
-    course2: [
-      { id: "ex4", number: 1, name: "Gestion de processus" },
-      { id: "ex5", number: 2, name: "Threads" },
-      { id: "ex6", number: 3, name: "Sockets" },
-    ],
-  },
-  submissions: [
-    {
-      id: "sub1",
-      courseName: "Algorithmes et structures de données",
-      exerciseName: "Exercice 1 - Tri à bulle",
-      language: "python",
-      status: "completed",
-      score: 85,
-    },
-    {
-      id: "sub2",
-      courseName: "Programmation système",
-      exerciseName: "Exercice 2 - Threads",
-      language: "c",
-      status: "pending",
-    },
-  ],
-};
+    // Vérification de session
+    checkUserSession();
 
-// Gestion de l'état de l'application
-const appState = {
-  isAuthenticated: false,
-  user: null,
-  submissions: [],
-  availableCourses: [],
-  availableExercises: {},
-};
+    // Test de connexion à l'API
+    testAPIConnection();
 
-// Configuration de l'API
-const API = {
-  BASE_URL: "/api", // Remplacer par l'URL réelle de l'API
-  ENDPOINTS: {
-    LOGIN: "/auth/login",
-    REGISTER: "/auth/register",
-    SUBMISSIONS: "/submissions",
-    COURSES: "/courses",
-    EXERCISES: "/exercises",
-    SUBMIT: "/submit",
-  },
-};
-
-// Fonction d'initialisation
-document.addEventListener("DOMContentLoaded", () => {
-  checkAuthState();
-  setupEventListeners();
-  if (appState.isAuthenticated) {
-    loadAvailableCourses();
-  }
+    // Attachement des gestionnaires d'événements selon la page
+    setupEventHandlers();
 });
 
-// Vérification de l'état d'authentification
-function checkAuthState() {
-  const token = localStorage.getItem("token");
-  const user = localStorage.getItem("user");
-
-  if (token && user) {
-    appState.isAuthenticated = true;
-    appState.user = JSON.parse(user);
-    updateUIState();
-    fetchUserSubmissions(); // Charger les soumissions réelles de l'utilisateur
-  }
+// Test de connexion à l'API
+function testAPIConnection() {
+    console.log('Test de connexion à l\'API...');
+    fetch(`${API_BASE_URL}/api/health`)
+        .then(response => response.json())
+        .then(data => console.log('API Health check:', data))
+        .catch(error => console.error('Erreur de connexion à l\'API:', error));
 }
 
-// Configuration des écouteurs d'événements
-function setupEventListeners() {
-  const loginForm = document.getElementById("login-form");
-  const registerForm = document.getElementById("register-form");
-  const logoutButton = document.getElementById("logout");
-  const uploadForm = document.getElementById("upload-form");
-  const courseSelect = document.getElementById("course");
+// Vérification de session utilisateur
+function checkUserSession() {
+    const userJson = localStorage.getItem('courseroUser');
+    if (userJson) {
+        try {
+            currentUser = JSON.parse(userJson);
+            console.log('Session utilisateur trouvée:', currentUser.email);
 
-  if (loginForm) {
-    loginForm.addEventListener("submit", handleLogin);
-  }
+            // Si on est sur la page d'authentification, afficher le dashboard
+            if (document.getElementById('dashboard')) {
+                document.getElementById('auth-section').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                loadUserSubmissions();
+            }
+        } catch (e) {
+            console.error('Erreur lors du chargement de la session:', e);
+            localStorage.removeItem('courseroUser');
+        }
+    } else {
+        console.log('Aucune session utilisateur trouvée');
+    }
+}
 
-  if (registerForm) {
-    registerForm.addEventListener("submit", handleRegister);
-  }
+// Configuration des gestionnaires d'événements selon la page
+function setupEventHandlers() {
+    // Formulaire de connexion
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        console.log('Formulaire de connexion détecté');
+        loginForm.addEventListener('submit', handleLogin);
+    }
 
-  if (logoutButton) {
-    logoutButton.addEventListener("click", handleLogout);
-  }
+    // Formulaire d'inscription
+    const registerForm = document.getElementById('register-form');
+    if (registerForm) {
+        console.log('Formulaire d\'inscription détecté');
+        registerForm.addEventListener('submit', handleRegister);
+    }
 
-  if (uploadForm) {
-    uploadForm.addEventListener("submit", handleUpload);
-    setupFileValidation();
-  }
+    // Bouton de déconnexion
+    const logoutButton = document.getElementById('logout');
+    if (logoutButton) {
+        logoutButton.addEventListener('click', handleLogout);
+    }
 
-  // Ajouter un écouteur pour mettre à jour les exercices disponibles lorsqu'un cours est sélectionné
-  if (courseSelect) {
-    courseSelect.addEventListener("change", function () {
-      loadExercisesForCourse(this.value);
+    // Formulaire d'upload
+    const uploadForm = document.getElementById('upload-form');
+    if (uploadForm) {
+        console.log('Formulaire de soumission détecté');
+
+        // Chargement des cours
+        loadCourses();
+
+        // Événement de changement de cours
+        const courseSelect = document.getElementById('course');
+        if (courseSelect) {
+            courseSelect.addEventListener('change', function() {
+                loadExercises(this.value);
+            });
+        }
+
+        // Soumission du formulaire
+        uploadForm.addEventListener('submit', handleCodeSubmission);
+    }
+}
+
+// Gestion de l'inscription
+function handleRegister(e) {
+    e.preventDefault();
+    console.log('Traitement du formulaire d\'inscription...');
+
+    const password = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+
+    if (password !== confirmPassword) {
+        alert('Les mots de passe ne correspondent pas!');
+        return;
+    }
+
+    const formData = {
+        email: document.getElementById('email').value,
+        password: password,
+        full_name: document.getElementById('fullName').value
+    };
+
+    console.log('Données d\'inscription:', formData);
+    console.log('URL de l\'API:', `${API_BASE_URL}/api/auth/register`);
+
+    fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Inscription réussie:', data);
+        alert('Inscription réussie! Vous pouvez maintenant vous connecter.');
+        window.location.href = 'authentication.html';
+    })
+    .catch(error => {
+        console.error('Erreur lors de l\'inscription:', error);
+        alert('Erreur lors de l\'inscription: ' + error.message);
     });
-  }
 }
 
 // Gestion de la connexion
-async function handleLogin(e) {
-  e.preventDefault();
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
+function handleLogin(e) {
+    e.preventDefault();
+    console.log('Traitement du formulaire de connexion...');
 
-  try {
-    if (DEMO_MODE) {
-      // Mode démo: accepter n'importe quel email/mot de passe
-      const demoToken = "demo_token_" + Math.random().toString(36).substring(2);
-      localStorage.setItem("token", demoToken);
-      localStorage.setItem("user", JSON.stringify(demoData.user));
+    const formData = {
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value
+    };
 
-      appState.isAuthenticated = true;
-      appState.user = demoData.user;
+    console.log('Données de connexion:', formData);
 
-      updateUIState();
-      loadAvailableCourses();
-      showNotification("Connexion réussie (mode démo)", "success");
-      return;
-    }
+    fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Connexion réussie:', data);
 
-    // Appel à l'API d'authentification (mode normal)
-    const response = await fetch(`${API.BASE_URL}${API.ENDPOINTS.LOGIN}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+        // Stockage des infos utilisateur
+        currentUser = {
+            id: data.user_id,
+            email: formData.email
+        };
+        localStorage.setItem('courseroUser', JSON.stringify(currentUser));
+
+        // Mise à jour de l'interface
+        document.getElementById('auth-section').classList.add('hidden');
+        document.getElementById('dashboard').classList.remove('hidden');
+
+        // Chargement des soumissions
+        loadUserSubmissions();
+    })
+    .catch(error => {
+        console.error('Erreur lors de la connexion:', error);
+        alert('Erreur lors de la connexion: ' + error.message);
     });
-
-    if (!response.ok) {
-      throw new Error("Identifiants incorrects");
-    }
-
-    const data = await response.json();
-
-    // Enregistrer le token et les infos utilisateur
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-
-    appState.isAuthenticated = true;
-    appState.user = data.user;
-
-    updateUIState();
-    loadAvailableCourses();
-    showNotification("Connexion réussie", "success");
-  } catch (error) {
-    showNotification(error.message, "error");
-  }
 }
 
 // Gestion de la déconnexion
 function handleLogout() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  appState.isAuthenticated = false;
-  appState.user = null;
-  appState.submissions = [];
-  updateUIState();
-  showNotification("Déconnexion réussie", "success");
+    console.log('Déconnexion...');
+    localStorage.removeItem('courseroUser');
+    currentUser = null;
+    window.location.href = 'authentication.html';
 }
 
-// Chargement des cours disponibles
-async function loadAvailableCourses() {
-  try {
-    if (DEMO_MODE) {
-      // Mode démo: utiliser les données fictives
-      appState.availableCourses = demoData.courses;
+// Chargement des cours
+function loadCourses() {
+    console.log('Chargement des cours...');
 
-      // Mettre à jour le menu déroulant des cours si disponible
-      const courseSelect = document.getElementById("course");
-      if (courseSelect) {
-        courseSelect.innerHTML =
-          `<option value="">Sélectionnez un cours</option>` +
-          demoData.courses
-            .map(
-              (course) => `<option value="${course.id}">${course.name}</option>`
-            )
-            .join("");
-      }
-      return;
-    }
+    fetch(`${API_BASE_URL}/api/courses`)
+        .then(response => response.json())
+        .then(courses => {
+            console.log('Cours chargés:', courses);
 
-    // Mode normal: appel à l'API
-    const response = await fetch(`${API.BASE_URL}${API.ENDPOINTS.COURSES}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-      },
-    });
+            const courseSelect = document.getElementById('course');
+            if (courseSelect) {
+                // Vider les options existantes sauf la première
+                while (courseSelect.options.length > 1) {
+                    courseSelect.remove(1);
+                }
 
-    if (!response.ok) throw new Error("Impossible de charger les cours");
-
-    const courses = await response.json();
-    appState.availableCourses = courses;
-
-    // Mettre à jour le menu déroulant des cours si disponible
-    const courseSelect = document.getElementById("course");
-    if (courseSelect) {
-      courseSelect.innerHTML =
-        `<option value="">Sélectionnez un cours</option>` +
-        courses
-          .map(
-            (course) => `<option value="${course.id}">${course.name}</option>`
-          )
-          .join("");
-    }
-  } catch (error) {
-    console.error("Erreur lors du chargement des cours:", error);
-    showNotification("Impossible de charger les cours", "error");
-  }
+                // Ajouter les nouveaux cours
+                courses.forEach(course => {
+                    const option = document.createElement('option');
+                    option.value = course.id;
+                    option.textContent = course.name;
+                    courseSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des cours:', error);
+            alert('Erreur lors du chargement des cours: ' + error.message);
+        });
 }
 
-// Chargement des exercices pour un cours spécifique
-async function loadExercisesForCourse(courseId) {
-  if (!courseId) return;
+// Chargement des exercices pour un cours
+function loadExercises(courseId) {
+    if (!courseId) return;
+    console.log('Chargement des exercices pour le cours ID:', courseId);
 
-  try {
-    if (DEMO_MODE) {
-      // Mode démo: utiliser les données fictives
-      const exercises = demoData.exercises[courseId] || [];
-      appState.availableExercises[courseId] = exercises;
+    fetch(`${API_BASE_URL}/api/exercises?course_id=${courseId}`)
+        .then(response => response.json())
+        .then(exercises => {
+            console.log('Exercices chargés:', exercises);
 
-      // Mettre à jour le menu déroulant des exercices
-      const exerciseSelect = document.getElementById("exercise");
-      if (exerciseSelect) {
-        exerciseSelect.innerHTML =
-          `<option value="">Sélectionnez un exercice</option>` +
-          exercises
-            .map(
-              (ex) =>
-                `<option value="${ex.id}">Exercice ${ex.number} - ${ex.name}</option>`
-            )
-            .join("");
-      }
-      return;
+            const exerciseSelect = document.getElementById('exercise');
+            if (exerciseSelect) {
+                // Vider toutes les options
+                exerciseSelect.innerHTML = '';
+
+                // Option par défaut
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Sélectionnez un exercice';
+                exerciseSelect.appendChild(defaultOption);
+
+                // Ajouter les nouveaux exercices
+                exercises.forEach(exercise => {
+                    const option = document.createElement('option');
+                    option.value = exercise.id;
+                    option.textContent = exercise.name;
+                    exerciseSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des exercices:', error);
+            alert('Erreur lors du chargement des exercices: ' + error.message);
+        });
+}
+
+// Gestion de la soumission de code
+function handleCodeSubmission(e) {
+    e.preventDefault();
+    console.log('Traitement de la soumission de code...');
+
+    if (!currentUser) {
+        alert('Veuillez vous connecter pour soumettre du code.');
+        window.location.href = 'authentication.html';
+        return;
     }
 
-    // Mode normal: appel à l'API
-    const response = await fetch(
-      `${API.BASE_URL}${API.ENDPOINTS.EXERCISES}?courseId=${courseId}`,
-      {
+    const courseId = document.getElementById('course').value;
+    const exerciseId = document.getElementById('exercise').value;
+    const languageId = document.getElementById('language').value;
+    const codeFile = document.getElementById('code-file').files[0];
+
+    if (!courseId || !exerciseId || !languageId || !codeFile) {
+        alert('Veuillez remplir tous les champs et sélectionner un fichier.');
+        return;
+    }
+
+    // Lecture du fichier
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const code = e.target.result;
+        submitCode(courseId, exerciseId, languageId, code);
+    };
+    reader.readAsText(codeFile);
+}
+
+// Soumission du code à l'API
+function submitCode(courseId, exerciseId, languageId, code) {
+    console.log('Soumission du code à l\'API...');
+
+    // Mise à jour de l'interface
+    const statusElement = document.getElementById('upload-status');
+    const progressElement = statusElement.querySelector('.progress');
+    const messageElement = statusElement.querySelector('.status-message');
+
+    statusElement.classList.remove('hidden');
+    messageElement.textContent = 'Envoi en cours...';
+    progressElement.style.width = '25%';
+
+    // Préparation des données
+    const submissionData = {
+        user_id: currentUser.id,
+        course_id: parseInt(courseId),
+        exercise_id: parseInt(exerciseId),
+        language_id: parseInt(languageId),
+        code: code
+    };
+
+    console.log('Données de soumission:', submissionData);
+
+    fetch(`${API_BASE_URL}/api/submit`, {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+            'Content-Type': 'application/json'
         },
-      }
-    );
-
-    if (!response.ok) throw new Error("Impossible de charger les exercices");
-
-    const exercises = await response.json();
-    appState.availableExercises[courseId] = exercises;
-
-    // Mettre à jour le menu déroulant des exercices
-    const exerciseSelect = document.getElementById("exercise");
-    if (exerciseSelect) {
-      exerciseSelect.innerHTML =
-        `<option value="">Sélectionnez un exercice</option>` +
-        exercises
-          .map(
-            (ex) =>
-              `<option value="${ex.id}">Exercice ${ex.number} - ${ex.name}</option>`
-          )
-          .join("");
-    }
-  } catch (error) {
-    console.error("Erreur lors du chargement des exercices:", error);
-    showNotification("Impossible de charger les exercices", "error");
-  }
-}
-
-// Récupération des soumissions de l'utilisateur
-async function fetchUserSubmissions() {
-  try {
-    if (DEMO_MODE) {
-      // Mode démo: utiliser les données fictives
-      appState.submissions = demoData.submissions;
-      updateSubmissionsTable();
-      return;
-    }
-
-    // Mode normal: appel à l'API
-    const response = await fetch(
-      `${API.BASE_URL}${API.ENDPOINTS.SUBMISSIONS}`,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      }
-    );
-
-    if (!response.ok) throw new Error("Impossible de charger les soumissions");
-
-    const data = await response.json();
-    appState.submissions = data.submissions;
-
-    updateSubmissionsTable();
-  } catch (error) {
-    console.error("Erreur lors du chargement des soumissions:", error);
-  }
-}
-
-// Gestion de l'upload de fichier
-async function handleUpload(e) {
-  e.preventDefault();
-
-  const courseId = document.getElementById("course").value;
-  const exerciseId = document.getElementById("exercise").value;
-  const language = document.getElementById("language").value;
-  const file = document.getElementById("code-file").files[0];
-
-  if (!courseId || !exerciseId || !language || !file) {
-    showNotification("Veuillez remplir tous les champs", "error");
-    return;
-  }
-
-  if (!validateFile(file, language)) {
-    showNotification("Format de fichier invalide", "error");
-    return;
-  }
-
-  try {
-    const uploadStatus = document.getElementById("upload-status");
-    const progressBar = uploadStatus.querySelector(".progress");
-    const statusMessage = uploadStatus.querySelector(".status-message");
-
-    uploadStatus.classList.remove("hidden");
-    statusMessage.textContent = "Envoi en cours...";
-    progressBar.style.width = "25%";
-
-    if (DEMO_MODE) {
-      // Simuler un délai d'envoi en mode démo
-      progressBar.style.width = "50%";
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      progressBar.style.width = "100%";
-
-      // Ajouter une soumission fictive
-      const courseName =
-        demoData.courses.find((c) => c.id === courseId)?.name || courseId;
-      const exercise = demoData.exercises[courseId]?.find(
-        (e) => e.id === exerciseId
-      );
-      const exerciseName = exercise
-        ? `Exercice ${exercise.number} - ${exercise.name}`
-        : exerciseId;
-
-      demoData.submissions.unshift({
-        id: "sub_" + Math.random().toString(36).substring(2),
-        courseName: courseName,
-        exerciseName: exerciseName,
-        language: language,
-        status: "pending",
-      });
-
-      statusMessage.textContent =
-        "Soumission réussie! Votre code est en attente d'évaluation.";
-      showNotification("Fichier envoyé avec succès (mode démo)", "success");
-
-      // Rediriger vers le tableau de bord après un court délai
-      setTimeout(() => {
-        window.location.href = "authentication.html";
-      }, 2000);
-      return;
-    }
-
-    // Créer un objet FormData pour l'envoi du fichier (mode normal)
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("courseId", courseId);
-    formData.append("exerciseId", exerciseId);
-    formData.append("language", language);
-
-    // Envoyer le fichier au serveur
-    const response = await fetch(`${API.BASE_URL}${API.ENDPOINTS.SUBMIT}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-      },
-      body: formData,
-    });
-
-    progressBar.style.width = "100%";
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || "Erreur lors de l'envoi du fichier");
-    }
-
-    const result = await response.json();
-
-    statusMessage.textContent =
-      "Soumission réussie! Votre code est en attente d'évaluation.";
-    showNotification("Fichier envoyé avec succès", "success");
-
-    // Rediriger vers le tableau de bord après un court délai
-    setTimeout(() => {
-      window.location.href = "authentication.html";
-    }, 2000);
-  } catch (error) {
-    showNotification(error.message, "error");
-  }
-}
-
-// Validation du fichier
-function validateFile(file, language) {
-  if (!file) return false;
-
-  const allowedExtensions = {
-    python: ".py",
-    c: ".c",
-  };
-
-  const fileExtension = file.name
-    .toLowerCase()
-    .slice(file.name.lastIndexOf("."));
-  return fileExtension === allowedExtensions[language];
-}
-
-// Configuration de la validation des fichiers
-function setupFileValidation() {
-  const fileInput = document.getElementById("code-file");
-  const languageSelect = document.getElementById("language");
-
-  if (fileInput && languageSelect) {
-    languageSelect.addEventListener("change", () => {
-      const language = languageSelect.value;
-      fileInput.accept = language === "python" ? ".py" : ".c";
-    });
-  }
-}
-
-// Mise à jour de l'interface utilisateur
-function updateUIState() {
-  const authSection = document.getElementById("auth-section");
-  const dashboard = document.getElementById("dashboard");
-
-  if (appState.isAuthenticated) {
-    if (authSection) authSection.classList.add("hidden");
-    if (dashboard) dashboard.classList.remove("hidden");
-  } else {
-    if (authSection) authSection.classList.remove("hidden");
-    if (dashboard) dashboard.classList.add("hidden");
-  }
-}
-
-// Mise à jour du tableau des soumissions
-function updateSubmissionsTable() {
-  const submissionsTable = document.getElementById("submissions-table");
-
-  if (!submissionsTable) return;
-
-  if (!appState.submissions.length) {
-    submissionsTable.innerHTML = `<tr><td colspan="5" class="text-center">Aucune soumission trouvée</td></tr>`;
-    return;
-  }
-
-  submissionsTable.innerHTML = appState.submissions
-    .map((sub) => {
-      let statusClass = "";
-      let scoreDisplay = "-";
-
-      // Appliquer des styles en fonction du statut
-      if (sub.status === "completed") {
-        statusClass = "success";
-        scoreDisplay = `${sub.score}%`;
-      } else if (sub.status === "error") {
-        statusClass = "error";
-      }
-
-      return `
-        <tr>
-          <td>${sub.courseName}</td>
-          <td>${sub.exerciseName}</td>
-          <td>${sub.language}</td>
-          <td class="${statusClass}">${translateStatus(sub.status)}</td>
-          <td>${scoreDisplay}</td>
-        </tr>
-      `;
+        body: JSON.stringify(submissionData)
     })
-    .join("");
-}
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Soumission réussie:', data);
+        messageElement.textContent = 'Code soumis avec succès, traitement en cours...';
+        progressElement.style.width = '50%';
 
-// Traduction des statuts en français
-function translateStatus(status) {
-  const statusMap = {
-    pending: "En attente",
-    processing: "En cours d'évaluation",
-    completed: "Évalué",
-    error: "Erreur",
-  };
-
-  return statusMap[status] || status;
-}
-
-// Affichage des notifications
-function showNotification(message, type) {
-  const notification = document.createElement("div");
-  notification.className = `notification ${type}`;
-  notification.textContent = message;
-
-  document.body.appendChild(notification);
-
-  setTimeout(() => {
-    notification.remove();
-  }, 3000);
-}
-
-// Fonction pour simuler l'évaluation en mode démo
-function setupDemoEvaluation() {
-  if (!DEMO_MODE) return;
-
-  // Vérifier périodiquement s'il y a des soumissions en attente, puis les évaluer
-  setInterval(() => {
-    const pendingSubmissions = demoData.submissions.filter(
-      (sub) => sub.status === "pending"
-    );
-
-    for (const sub of pendingSubmissions) {
-      // Simuler un statut "en cours d'évaluation" pendant quelques secondes
-      sub.status = "processing";
-
-      // Simuler la fin de l'évaluation avec un score aléatoire
-      setTimeout(() => {
-        sub.status = "completed";
-        sub.score = Math.floor(Math.random() * 40) + 60; // Score entre 60 et 100
-        updateSubmissionsTable();
-      }, 5000);
-    }
-
-    if (pendingSubmissions.length > 0) {
-      updateSubmissionsTable();
-    }
-  }, 3000);
-}
-
-// Démarrer la simulation d'évaluation en mode démo
-setupDemoEvaluation();
-
-// Ajouter la fonction de gestion de l'inscription
-async function handleRegister(e) {
-  e.preventDefault();
-
-  const fullName = document.getElementById("fullName").value;
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-  const confirmPassword = document.getElementById("confirmPassword").value;
-
-  // Validation des entrées
-  if (password !== confirmPassword) {
-    showNotification("Les mots de passe ne correspondent pas", "error");
-    return;
-  }
-
-  try {
-    if (DEMO_MODE) {
-      // Mode démo: simuler une inscription réussie
-      const demoToken = "demo_token_" + Math.random().toString(36).substring(2);
-      localStorage.setItem("token", demoToken);
-      localStorage.setItem("user", JSON.stringify(demoData.user));
-
-      showNotification("Inscription réussie (mode démo)", "success");
-      window.location.href = "authentication.html";
-      return;
-    }
-
-    // Appel à l'API d'inscription (mode normal)
-    const response = await fetch(`${API.BASE_URL}${API.ENDPOINTS.REGISTER}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, fullName }),
+        // Vérification périodique du statut
+        checkSubmissionStatus(data.submission_id, statusElement, progressElement, messageElement);
+    })
+    .catch(error => {
+        console.error('Erreur lors de la soumission:', error);
+        messageElement.textContent = 'Erreur lors de la soumission: ' + error.message;
+        statusElement.classList.add('error');
     });
+}
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || "Erreur lors de l'inscription");
-    }
+// Vérification du statut d'une soumission
+function checkSubmissionStatus(submissionId, statusElement, progressElement, messageElement) {
+    console.log('Vérification du statut de la soumission:', submissionId);
 
-    const data = await response.json();
+    const pollInterval = setInterval(() => {
+        fetch(`${API_BASE_URL}/api/status/${submissionId}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Statut de la soumission:', data);
 
-    // Enregistrer le token et les infos utilisateur
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
+                switch(data.status) {
+                    case 'queued':
+                        messageElement.textContent = 'En attente de traitement...';
+                        progressElement.style.width = '50%';
+                        break;
+                    case 'processing':
+                        messageElement.textContent = 'Traitement en cours...';
+                        progressElement.style.width = '75%';
+                        break;
+                    case 'completed':
+                        clearInterval(pollInterval);
+                        messageElement.textContent = `Traitement terminé. Score: ${data.score}%`;
+                        progressElement.style.width = '100%';
+                        statusElement.classList.add('success');
 
-    showNotification("Inscription réussie", "success");
+                        // Afficher les détails si disponibles
+                        if (data.details && data.details.output) {
+                            const outputElement = document.createElement('pre');
+                            outputElement.textContent = data.details.output;
+                            statusElement.appendChild(outputElement);
+                        }
+                        break;
+                    case 'error':
+                        clearInterval(pollInterval);
+                        messageElement.textContent = 'Erreur lors du traitement.';
+                        statusElement.classList.add('error');
+                        break;
+                    default:
+                        messageElement.textContent = `Statut: ${data.status}`;
+                }
+            })
+            .catch(error => {
+                console.error('Erreur lors de la vérification du statut:', error);
+                clearInterval(pollInterval);
+                messageElement.textContent = 'Erreur lors de la vérification du statut: ' + error.message;
+                statusElement.classList.add('error');
+            });
+    }, 2000); // Vérification toutes les 2 secondes
+}
 
-    // Rediriger vers la page d'accueil
-    window.location.href = "authentication.html";
-  } catch (error) {
-    showNotification(error.message, "error");
-  }
+// Chargement des soumissions de l'utilisateur
+function loadUserSubmissions() {
+    if (!currentUser) return;
+    console.log('Chargement des soumissions pour l\'utilisateur:', currentUser.id);
+
+    fetch(`${API_BASE_URL}/api/submissions?user_id=${currentUser.id}`)
+        .then(response => response.json())
+        .then(submissions => {
+            console.log('Soumissions chargées:', submissions);
+
+            const tableBody = document.getElementById('submissions-table');
+            if (tableBody) {
+                tableBody.innerHTML = '';
+
+                if (submissions.length === 0) {
+                    const row = document.createElement('tr');
+                    const cell = document.createElement('td');
+                    cell.colSpan = 5;
+                    cell.textContent = 'Aucune soumission trouvée';
+                    cell.style.textAlign = 'center';
+                    row.appendChild(cell);
+                    tableBody.appendChild(row);
+                    return;
+                }
+
+                submissions.forEach(sub => {
+                    const row = document.createElement('tr');
+
+                    // Cours
+                    const courseCell = document.createElement('td');
+                    courseCell.textContent = sub.course_name;
+                    row.appendChild(courseCell);
+
+                    // Exercice
+                    const exerciseCell = document.createElement('td');
+                    exerciseCell.textContent = sub.exercise_name;
+                    row.appendChild(exerciseCell);
+
+                    // Langage (à adapter selon votre structure)
+                    const langCell = document.createElement('td');
+                    langCell.textContent = sub.language_id === 1 ? 'Python' : 'C';
+                    row.appendChild(langCell);
+
+                    // Statut
+                    const statusCell = document.createElement('td');
+                    statusCell.textContent = sub.status;
+                    row.appendChild(statusCell);
+
+                    // Score
+                    const scoreCell = document.createElement('td');
+                    scoreCell.textContent = sub.score !== null ? `${sub.score}%` : 'N/A';
+                    row.appendChild(scoreCell);
+
+                    tableBody.appendChild(row);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des soumissions:', error);
+
+            if (document.getElementById('submissions-table')) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.textContent = 'Erreur lors du chargement des soumissions: ' + error.message;
+                cell.style.textAlign = 'center';
+                row.appendChild(cell);
+                document.getElementById('submissions-table').appendChild(row);
+            }
+        });
 }

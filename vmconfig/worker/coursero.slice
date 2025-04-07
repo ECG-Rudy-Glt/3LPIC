@@ -1,0 +1,10 @@
+
+[Unit]
+Description=Coursero Resources Slice
+Before=slices.target
+
+[Slice]
+CPUWeight=512
+MemoryMax=512M
+TasksMax=100
+

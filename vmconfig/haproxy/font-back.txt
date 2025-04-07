@@ -1,0 +1,35 @@
+# Frontend pour HTTP (redirection vers HTTPS)
+frontend http_front
+    bind *:80
+    mode http
+    option httplog
+    option forwardfor
+    http-request set-header X-Forwarded-Port %[dst_port]
+    http-request add-header X-Forwarded-Proto http
+    http-request redirect scheme https code 301 unless { ssl_fc }
+
+# Frontend pour HTTPS
+frontend https_front
+    bind *:443 ssl crt /etc/ssl/coursero/combined.pem
+    mode http
+    option httplog
+    option forwardfor
+    http-request set-header X-Forwarded-Port %[dst_port]
+    http-request add-header X-Forwarded-Proto https
+    
+    # ACL pour différents backends
+    acl is_api path_beg /api
+    
+    # Routage
+    use_backend api_servers if is_api
+    default_backend web_servers
+
+# Backend pour les serveurs web
+backend web_servers
+    mode http
+    balance roundrobin
+    option httpchk HEAD / HTTP/1.1\r\nHost:\ coursero.com
+    http-check expect status 200
+    cookie SERVERID insert indirect nocache
+    server web1 192.168.159.231:80 check cookie web1
+    server web2 192.168.159.232:80 check cookie web2

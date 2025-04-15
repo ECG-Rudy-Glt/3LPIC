@@ -1,2 +1,0 @@
-# 3LPIC
-Linux work
